@@ -176,9 +176,34 @@ class GreetManager:
 
 		return True
 
+	def _greet_list(self, bot, trigger, c):
+		""" List users with greeting message on channel.
+		Usage: .greetet list <#channel>
+		"""
+		pattern = r'''
+			^\.greeter\s+list
+			\s+([~&#+!][^\s,]+)	# channel
+			'''
+		match = re.match(pattern, trigger.group(), re.IGNORECASE | re.VERBOSE)
+		if match is None:
+			self._show_doc(bot, 'list')
+			return
+
+		channel = match.group(1).lower()
+
+		c.execute('''SELECT * FROM greeter WHERE channel = :channel
+		'''.format(self.sub), {"channel": channel})
+		nicks = [row[0] for row in c.fetchall()]
+
+		if not nicks:
+			bot.reply("No greetings on " + channel + " yet.")
+			return
+
+		bot.reply("Users with greeting message on " + channel + ": " + ', '.join(nicks))
+
 	def _greet_help(self, bot, trigger, c):
-		""" Get help on any of the greeter commands.
-		Usage: .greet help <command>
+		"""Get help on any of the greeter commands.
+		Usage: .rss help <command>
 		"""
 		command = trigger.group(4)
 		if command in self.actions:
