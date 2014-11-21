@@ -1,4 +1,9 @@
 # coding=utf8
+"""
+greeter.py - Willie Greeting Module
+Copyright 2014, Julen Landa Alustiza
+
+"""
 
 import willie
 import re
@@ -49,8 +54,14 @@ class GreetManager:
 	def __init__(self, bot):
 		self.running = True
 		self.sub = bot.db.substitution
+		self.actions = sorted(method[7:] for method in dir(self) if method[:7] == '_greet_')
 
-		self.actions = sorted(method[5:] for method in dir(self) if method[5:] == '_greet_')
+	def _show_doc(self, bot, command):
+		"""Given an RSS command, say the docstring for the corresponding method."""
+		for line in getattr(self, '_greet_' + command).__doc__.split('\n'):
+			line = line.strip()
+			if line:
+				bot.reply(line)
 
 	def manage_greeter(self, bot, trigger):
 		if not (trigger.admin or trigger.nick.lower() in bot.config.greeter.get_list('users')): 
@@ -58,16 +69,15 @@ class GreetManager:
 			return
 
 		text = trigger.group().split()
+		if (len(text) < 2 or text[1] not in self.actions):
+			bot.reply("Usage: .greeter <command>")
+			bot.reply("Available greeter commands: " + ', '.join(self.actions))
+			return
+
 		conn = bot.db.connect()
-		if text[1] == "add":
-			self._greet_add(bot, trigger, conn.cursor())
-		if text[1] == "show":
-			self._greet_show(bot, trigger, conn.cursor())
-		if text[1] == "delete":
-			self._greet_del(bot, trigger, conn.cursor())
-	        # run the function and commit database changes if it returns true
-		#if getattr(self, '_rss_' + text[1])(bot, trigger, conn.cursor()):
-		conn.commit()
+		# run the function and commit database changes if it returns true
+		if getattr(self, '_greet_' + text[1])(bot, trigger, conn.cursor()):
+			conn.commit()
 		conn.close()
 
 	def _greet_add(self, bot, trigger, c):
@@ -82,6 +92,7 @@ class GreetManager:
 			'''
 		match = re.match(pattern, trigger.group(), re.IGNORECASE | re.VERBOSE)
 		if match is None:
+			self._show_doc(bot, 'add')
 			return
 
 		nickname = match.group(1).lower()
@@ -107,7 +118,7 @@ class GreetManager:
 		return True
 
 	def _greet_del(self, bot, trigger, c):
-		""" Delete existint greeting messages for a nickname on a channel (optional)
+		""" Delete existing greeting messages for a nickname on a channel (optional)
 		Usage: .greeter del <nickname> <#channel>
 		"""
 		pattern = r'''
@@ -118,6 +129,7 @@ class GreetManager:
 
 		match = re.match(pattern, trigger.group(), re.IGNORECASE | re.VERBOSE)
 		if match is None:
+			self._show_doc(bot, 'del')
 			return
 
 		nickname = match.group(1).lower()
@@ -147,6 +159,7 @@ class GreetManager:
 			'''
 		match = re.match(pattern, trigger.group(), re.IGNORECASE | re.VERBOSE)
 		if match is None:
+			self._show_doc(bot, 'show')
 			return
 
 		nickname = match.group(1).lower()
@@ -163,7 +176,16 @@ class GreetManager:
 
 		return True
 
-		
+	def _greet_help(self, bot, trigger, c):
+		""" Get help on any of the greeter commands.
+		Usage: .greet help <command>
+		"""
+		command = trigger.group(4)
+		if command in self.actions:
+			self._show_doc(bot, command)
+		else:
+			bot.reply("For help on a command, type: .greet help <command>")
+			bot.reply("Available greeter commands: " + ', '.join(self.actions))
 
 	def greet(self, bot, trigger):
 		conn = bot.db.connect()
