@@ -3,6 +3,16 @@
 import willie
 import re
 
+def configure(config):
+	"""
+	| [greeter] | example | purpose |
+	| -------- | ------- | ------- |
+	| users | user1, user2 | users who can manage greeter module |
+	"""
+	if config.option('Configure user greeter module', False):
+		config.add_section('greeter')
+		config.interactive_add('greeter', 'users', 'comma separated user list', '')
+
 def setup(bot):
 	bot.memory['greeter_manager'] = GreetManager(bot)
 
@@ -39,12 +49,11 @@ class GreetManager:
 	def __init__(self, bot):
 		self.running = True
 		self.sub = bot.db.substitution
-		self.users = ['ealdor', 'petisoeol']
 
 		self.actions = sorted(method[5:] for method in dir(self) if method[5:] == '_greet_')
 
 	def manage_greeter(self, bot, trigger):
-		if not (trigger.admin or trigger.nick.lower() in self.users): 
+		if not (trigger.admin or trigger.nick.lower() in bot.config.greeter.get_list('users')): 
 			bot.reply("Sorry, no admin no party")
 			return
 
