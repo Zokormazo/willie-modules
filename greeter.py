@@ -64,10 +64,6 @@ class GreetManager:
 				bot.reply(line)
 
 	def manage_greeter(self, bot, trigger):
-		if not (trigger.admin or trigger.nick.lower() in bot.config.greeter.get_list('users')): 
-			bot.reply("Sorry, no admin no party")
-			return
-
 		text = trigger.group().split()
 		if (len(text) < 2 or text[1] not in self.actions):
 			bot.reply("Usage: .greeter <command>")
@@ -84,6 +80,10 @@ class GreetManager:
 		""" Add a greeting message for a nickname on a channel.
 		Usage: .greeter add <nickname> <#channel> "<greeting message>"
 		"""
+		if not (trigger.admin or trigger.nick.lower() in bot.config.greeter.get_list('users')): 
+			bot.reply("Sorry, no admin no party")
+			return
+
 		pattern = r'''
 			^\.greeter\s+add
 			\s+("[^"]+"|[\w-]+)	# nickname
@@ -121,6 +121,10 @@ class GreetManager:
 		""" Delete existing greeting messages for a nickname on a channel (optional)
 		Usage: .greeter del <nickname> <#channel>
 		"""
+		if not (trigger.admin or trigger.nick.lower() in bot.config.greeter.get_list('users')): 
+			bot.reply("Sorry, no admin no party")
+			return
+
 		pattern = r'''
 			^\.greeter\s+delete
 			\s+("[^"]+"|[\w-]+)	# nickname
