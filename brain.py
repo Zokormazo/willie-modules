@@ -153,6 +153,18 @@ class Talking:
 		self.brainTalking = brain
 		bot.reply("Brain changed to " + brain)
 
+	def _brain_help(self, bot, trigger):
+		"""Get help on any of the brain commands.
+		Usage: .brain help <command>
+		"""
+		command = trigger.group(4)
+		if command in self.actions:
+			self._show_doc(bot, command)
+		else:
+			bot.reply("For help on a command, type: .brain help <command>")
+			bot.reply("Available brain commands: " + ', '.join(self.actions))
+
+
 	def _learn(self, bot, trigger):
 		if trigger.nick == bot.nick or trigger.nick.lower() in bot.config.brain.get_list('ignored_users') or trigger[0] == '.' :
 			return
