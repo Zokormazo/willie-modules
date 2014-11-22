@@ -207,7 +207,7 @@ class GreetManager:
 
 	def _greet_help(self, bot, trigger, c):
 		"""Get help on any of the greeter commands.
-		Usage: .rss help <command>
+		Usage: .greet help <command>
 		"""
 		command = trigger.group(4)
 		if command in self.actions:
