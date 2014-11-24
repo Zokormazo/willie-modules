@@ -23,7 +23,7 @@ def configure(config):
 	if config.option('Configure user eol module', False):
 		config.add_section('eol')
 		config.interactive_add('eol', 'username', 'username', '')
-		config.interactive_add('password', 'password', 'password', '')
+		config.interactive_add('eol', 'password', 'password', '')
 
 def setup(bot):
 	bot.memory['eol_manager'] = EolManager(bot)
