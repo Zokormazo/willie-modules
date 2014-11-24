@@ -3,6 +3,7 @@
 brain.py - Willie talking bot module
 Copyright 2014, Julen Landa Alustiza
 
+Licensed under the Eiffel Forum License 2.
 """
 
 import random

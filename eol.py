@@ -1,8 +1,10 @@
 # coding=utf8
-'''
+"""
 eol.py - Willie elotrolado.net tools module
 Copyright 2014, Julen Landa Alustiza
-'''
+
+Licensed under the Eiffel Forum License 2.
+"""
 
 import willie
 import requests

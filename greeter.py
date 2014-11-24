@@ -3,6 +3,7 @@
 greeter.py - Willie Greeting Module
 Copyright 2014, Julen Landa Alustiza
 
+Licensed under the Eiffel Forum License 2.
 """
 
 import willie
