@@ -73,7 +73,7 @@ class EolManager:
 
 	def _eol_who(self, bot, trigger):
 		""" Show user's EOL profile
-		Usage: .eol who <user> | .eol who "Username with spaces"
+		Usage: .eol who <user> | .eol who "Username with special characters"
 		"""
 		pattern = r'''
 			^\.eol\s+who
@@ -87,10 +87,18 @@ class EolManager:
 		username = match.group(1).replace('"','')
 		params = { 'mode': 'viewprofile', 'mention': '1', 'un': username }
 		response = self.session.get(BASE_URL + 'memberlist.php', params=params)
+		if response.status_code == 404:
+			bot.say('Usuario no encontrado')
+			return
+		if response.status_code == 403:
+			self._login(bot)
+			self._eol_who(bot, trigger)
+			return
 		soup = BeautifulSoup(response.text)
 		bot.say(soup.title.string)
-		details = soup.find('div', {'class': 'column2'}).text
-		bot.say(str(details))
+		details = soup.findAll('div', {'class': 'column2'})
+		for detail in details:
+			bot.say(str(detail.text))
 
 
 	def _login(self, bot):
