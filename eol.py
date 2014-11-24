@@ -12,6 +12,7 @@ import re
 from bs4 import BeautifulSoup
 
 BASE_URL = 'http://www.elotrolado.net/'
+SAY_PREFIX = '[EOL] '
 
 def configure(config):
 	"""
@@ -95,11 +96,21 @@ class EolManager:
 			self._eol_who(bot, trigger)
 			return
 		soup = BeautifulSoup(response.text)
-		bot.say(soup.title.string)
-		details = soup.findAll('div', {'class': 'column2'})
-		for detail in details:
-			bot.say(str(detail.text))
-
+		left = soup.find('form', {'id': 'viewprofile'})
+		title = left.find('dd')
+		user = title.find_next('span')
+		detail = soup.find('div', {'class': 'column2'})
+		registered = detail.find('dd')
+		last_seen = registered.find_next('dd')
+		messages = last_seen.find_next('dd').a.string
+		bot.say(SAY_PREFIX + "Usuario: " + user.string + " - " + title.string + " | Registrado: " + registered.string + " | Ultima vez: " + last_seen.string + " | " + messages)
+		wiki = detail.find_next('div', {'class': 'column2'})
+		most_edited = wiki.find('dd')
+		if most_edited is None:
+			return
+		last_edited = most_edited.find_next('dd')
+		stats = last_edited.find_next('dd')
+		bot.say(SAY_PREFIX + stats.text + " |  Mas editado: " + most_edited.text + " | Ultimo editado: " + last_edited.a.text)
 
 	def _login(self, bot):
 		response = self.session.get(BASE_URL + 'ucp.php')
