@@ -140,14 +140,19 @@ class EolManager:
 	def _show_thread(self, bot, thread):
 		response = self.session.get(BASE_URL + "hilo__" + str(thread))
 		if response.status_code == 404:
-			bot.say("Hilo no encontrado")
+			bot.say(SAY_PREFIX + "Hilo no encontrado")
 			return
 		if response.status_code == 403:
-			bot.say("No tengo permiso para ver ese hilo")
+			bot.say(SAY_PREFIX + "No tengo permiso para ver ese hilo")
 			return
 		soup = BeautifulSoup(response.text)
-		string = SAY_PREFIX + soup.find('meta', {'name': 'keywords'})['content']
-		string = string + " | Autor:" + soup.find('dd', {'class': 'author'}).text
+		title_list = soup.find('meta', {'name': 'keywords'})['content'].split(',')
+		string = SAY_PREFIX + "Hilo: " + ', '.join(title_list[:len(title_list)-2]) + " | Foro: " + title_list[len(title_list)-1] + "/" + title_list[len(title_list)-2]
+		string = string + " | Autor: " + soup.find('dd', {'class': 'author'}).text.strip()
+		string = string + " | Creado el: " + soup.find('time')['title']
+		match = re.match(r'.*\s(\d+\smensajes?)', soup.find('div', {'class': 'pagination'}).text)
+		if match:
+			string = string + " | " + match.group(1)
 		bot.say(string)
 		
 
