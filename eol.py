@@ -122,6 +122,35 @@ class EolManager:
 		for line in string.split('\n'):
 			bot.say(line)
 
+	def _eol_thread(self, bot, trigger):
+		""" Show thread
+		Usage: .eol who <thread-number>
+		"""
+		pattern = r'''
+			^\.eol\s+thread
+			\s+([0-9]+)	#thread number
+			'''
+		match = re.match(pattern, trigger.group(), re.IGNORECASE | re.VERBOSE)
+		if match is None:
+			self._show_doc(bot, 'thread')
+			return
+		thread = match.group(1)
+		self._show_thread(bot, thread)
+
+	def _show_thread(self, bot, thread):
+		response = self.session.get(BASE_URL + "hilo__" + str(thread))
+		if response.status_code == 404:
+			bot.say("Hilo no encontrado")
+			return
+		if response.status_code == 403:
+			bot.say("No tengo permiso para ver ese hilo")
+			return
+		soup = BeautifulSoup(response.text)
+		string = SAY_PREFIX + soup.find('meta', {'name': 'keywords'})['content']
+		string = string + " | Autor:" + soup.find('dd', {'class': 'author'}).text
+		bot.say(string)
+		
+
 	def _login(self, bot):
 		response = self.session.get(BASE_URL + 'ucp.php')
 		sid = response.cookies['phpbb3_eol_sid']
@@ -131,4 +160,17 @@ class EolManager:
 		
 
 	def show_about(self, bot, trigger):
-		bot.say('EOL show about...')
+		pattern = r'''
+			(.*\s)?
+			(http://)?www\.elotrolado\.net/
+			([a-z]+)
+			_.*_
+			(\d+)
+			'''
+		match = re.match(pattern, trigger.group(), re.IGNORECASE | re.VERBOSE)
+		if match is None:
+			return
+		type = match.group(3)
+		id = match.group(4)
+		if type == 'hilo':
+			self._show_thread(bot, id)
