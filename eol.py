@@ -42,6 +42,7 @@ class EolManager:
 	def __init__(self, bot):
 		self.actions = sorted(method[5:] for method in dir(self) if method[:5] == '_eol_')
 		self.session = requests.Session()
+		self.session.headers.update({'User-Agent': 'Braulio el bot de Zokormazo 0.1-git'})
 		self._login(bot)
 
 	def _show_doc(self, bot, command):
@@ -96,7 +97,6 @@ class EolManager:
 			self._eol_who(bot, trigger)
 			return
 		soup = BeautifulSoup(response.text)
-
 		tag = soup.find('form', {'id': 'viewprofile'}).find('dd') # user's title
 		if tag.string is None:
 			string = ""
@@ -146,10 +146,12 @@ class EolManager:
 			bot.say(SAY_PREFIX + "No tengo permiso para ver ese hilo")
 			return
 		soup = BeautifulSoup(response.text)
-		title_list = soup.find('meta', {'name': 'keywords'})['content'].split(',')
-		string = SAY_PREFIX + "Hilo: " + ', '.join(title_list[:len(title_list)-2]) + " | Foro: " + title_list[len(title_list)-1] + "/" + title_list[len(title_list)-2]
-		string = string + " | Autor: " + soup.find('dd', {'class': 'author'}).text.strip()
-		string = string + " | Creado el: " + soup.find('time')['title']
+		string = SAY_PREFIX + "Hilo: " + soup.find('h1').find('a').string.strip()
+		forums = []
+		for a in soup.find('h3').find_all('a'):
+			forums.append(a.string)
+		string = string + " | Foro: " + ', '.join(forums)
+		string = string + " | Autor: " + soup.find('div', {'class': 'postuser'}).find('a').string.strip()
 		match = re.match(r'.*\s(\d+\smensajes?)', soup.find('div', {'class': 'pagination'}).text)
 		if match:
 			string = string + " | " + match.group(1)
@@ -157,8 +159,10 @@ class EolManager:
 		
 
 	def _login(self, bot):
-		response = self.session.get(BASE_URL + 'ucp.php')
+		response = self.session.get(BASE_URL + 'foro_playstation-4_204')
 		sid = response.cookies['phpbb3_eol_sid']
+		params = { 'mode' : 'forcemobile', 'sid' : sid }
+		response = self.session.get(BASE_URL + 'rpc.php', params=params)
 		params = { 'mode' : 'login' }
 		formdata = { 'username' : bot.config.eol.username, 'password' : bot.config.eol.password, 'sid' : sid, 'autologin' : 'on', 'redirect': 'ucp.php', 'login': 'Identificarse' }
 		response = self.session.post(BASE_URL + 'ucp.php', params=params, data=formdata)
