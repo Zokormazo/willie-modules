@@ -96,21 +96,31 @@ class EolManager:
 			self._eol_who(bot, trigger)
 			return
 		soup = BeautifulSoup(response.text)
-		left = soup.find('form', {'id': 'viewprofile'})
-		title = left.find('dd')
-		user = title.find_next('span')
-		detail = soup.find('div', {'class': 'column2'})
-		registered = detail.find('dd')
-		last_seen = registered.find_next('dd')
-		messages = last_seen.find_next('dd').a.string
-		bot.say(SAY_PREFIX + "Usuario: " + user.string + " - " + title.string + " | Registrado: " + registered.string + " | Ultima vez: " + last_seen.string + " | " + messages)
-		wiki = detail.find_next('div', {'class': 'column2'})
-		most_edited = wiki.find('dd')
-		if most_edited is None:
-			return
-		last_edited = most_edited.find_next('dd')
-		stats = last_edited.find_next('dd')
-		bot.say(SAY_PREFIX + stats.text + " |  Mas editado: " + most_edited.text + " | Ultimo editado: " + last_edited.a.text)
+
+		tag = soup.find('form', {'id': 'viewprofile'}).find('dd') # user's title
+		if tag.string is None:
+			string = ""
+		else:
+			string = " :: " + tag.string
+		tag = tag.find_next('span')	# username
+		string = SAY_PREFIX + tag.string + string
+		tag = soup.find('div', {'class': 'column2'}) # user details
+		tag = tag.find('dd')	# registered
+		string = string + " | Registered: " + tag.string
+		tag = tag.find_next('dd') # last seen
+		string = string + " | Ultima vez: " + tag.string
+		tag = tag.find_next('dd').a
+		string = string + " | Mensajes: " + tag.string
+		tag = tag.find_next('div', {'class': 'column2'}) # wiki details
+		tag = tag.find('dd')	# most_edited
+		if tag is not None:	# there is wiki info
+			string2 = "Mas editado: " + tag.text
+			tag = tag.find_next('dd').a	#last edited
+			string2 = string2 + " | Ultimo editado: " + tag.text
+			tag = tag.find_next('dd')	#wiki stats
+			string = string + "\n" + SAY_PREFIX + tag.text + " | " + string2
+		for line in string.split('\n'):
+			bot.say(line)
 
 	def _login(self, bot):
 		response = self.session.get(BASE_URL + 'ucp.php')
