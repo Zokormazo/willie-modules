@@ -20,11 +20,13 @@ def configure(config):
 	| -------- | ------- | ------- |
 	| username | foo | username |
 	| password | 12345 | password |
+	| lines_to_show	| 5 | post/news lines to show |
 	"""
 	if config.option('Configure user eol module', False):
 		config.add_section('eol')
 		config.interactive_add('eol', 'username', 'username', '')
 		config.interactive_add('eol', 'password', 'password', '')
+		config.interactive_add('eol', 'lines_to_show', '5', '5')
 
 def setup(bot):
 	bot.memory['eol_manager'] = EolManager(bot)
@@ -103,7 +105,7 @@ class EolManager:
 		else:
 			string = " :: " + tag.string
 		tag = tag.find_next('span')	# username
-		string = SAY_PREFIX + tag.string + string
+		string = tag.string + string
 		tag = soup.find('div', {'class': 'column2'}) # user details
 		tag = tag.find('dd')	# registered
 		string = string + " | Registered: " + tag.string
@@ -118,13 +120,13 @@ class EolManager:
 			tag = tag.find_next('dd').a	#last edited
 			string2 = string2 + " | Ultimo editado: " + tag.text
 			tag = tag.find_next('dd')	#wiki stats
-			string = string + "\n" + SAY_PREFIX + tag.text + " | " + string2
+			string = string + "\n" + tag.text + " | " + string2
 		for line in string.split('\n'):
-			bot.say(line)
+			bot.say(SAY_PREFIX + line)
 
 	def _eol_thread(self, bot, trigger):
 		""" Show thread
-		Usage: .eol who <thread-number>
+		Usage: .eol thread <thread-number>
 		"""
 		pattern = r'''
 			^\.eol\s+thread
@@ -136,6 +138,21 @@ class EolManager:
 			return
 		thread = match.group(1)
 		self._show_thread(bot, thread)
+
+	def _eol_post(self, bot, trigger):
+		""" Show post
+		Usage: .eol post <post-number>
+		"""
+		pattern = r'''
+			^\.eol\s+post
+			\s+([0-9]+)	#post number
+			'''
+		match = re.match(pattern, trigger.group(), re.IGNORECASE | re.VERBOSE)
+		if match is None:
+			self._show_doc(bot, 'post')
+			return
+		post = match.group(1)
+		self._show_post(bot, post)
 
 	def _show_thread(self, bot, thread):
 		response = self.session.get(BASE_URL + "hilo__" + str(thread))
@@ -156,7 +173,37 @@ class EolManager:
 		if match:
 			string = string + " | " + match.group(1)
 		bot.say(string)
+
+	def _show_post(self, bot, post):
+		params = { 'p': str(post) }
+		response = self.session.get(BASE_URL + "viewtopic.php", params=params)
+		if response.status_code == 404:
+			bot.say(SAY_PREFIX + "Post no encontrado")
+			return
+		if response.status_code == 403:
+			bot.say(SAY_PREFIX + "No tengo permiso para ver ese post")
+			return
+		soup = BeautifulSoup(response.text)
+		post = soup.find('div', {'id': 'p' + post})
+		string = "Post | Autor: " + post.find('div', {'class': 'postuser'}).find('a').string
+		string = string + " | Posteado el: " + post.find('div', {'class': 'postuser'}).find('p').text
+		body = post.find('div', {'class': 'postbody'})
+		for tag in body.findAll('div'):
+			tag.unwrap()
+		for tag in body.findAll('blockquote'):		
+			tag.extract()
+		for tag in body.findAll('dl', {'class': 'codebox'}):
+			tag.extract()
+		for tag in body.findAll('br'):
+			tag.replace_with('\n')
+		post_list = re.sub('\n+', '\n', unicode(body.text.strip())).split('\n')
 		
+		for line in string.split('\n'):
+			bot.say(SAY_PREFIX + line)
+		for line in post_list[0:int(bot.config.eol.lines_to_show)]:
+			bot.say(SAY_PREFIX + "\t" + line)
+		if len(post_list) > int(bot.config.eol.lines_to_show):
+			bot.say(SAY_PREFIX + "\t(...)")
 
 	def _login(self, bot):
 		response = self.session.get(BASE_URL + 'foro_playstation-4_204')
@@ -175,11 +222,16 @@ class EolManager:
 			([a-z]+)
 			_.*_
 			(\d+)
+			(?:_s\d+)?
+			(?:\#p(\d+))?
 			'''
 		match = re.match(pattern, trigger.group(), re.IGNORECASE | re.VERBOSE)
 		if match is None:
 			return
 		type = match.group(3)
 		id = match.group(4)
+		post = match.group(5) if match.group(5) else None
 		if type == 'hilo':
 			self._show_thread(bot, id)
+			if post:
+				self._show_post(bot, post)
