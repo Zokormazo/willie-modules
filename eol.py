@@ -227,11 +227,19 @@ class EolManager:
 			'''
 		match = re.match(pattern, trigger.group(), re.IGNORECASE | re.VERBOSE)
 		if match is None:
-			return
-		type = match.group(3)
-		id = match.group(4)
-		post = match.group(5) if match.group(5) else None
-		if type == 'hilo':
-			self._show_thread(bot, id)
-			if post:
-				self._show_post(bot, post)
+			pattern = r'''
+				(.*\s)?
+				(http://)?www\.elotrolado\.net/viewtopic\.php\?p=
+				(\d+)
+				'''
+			match = re.match(pattern, trigger.group(), re.IGNORECASE | re.VERBOSE)
+			if match is not None:
+				self._show_post(bot, match.group(3))
+		else:
+			type = match.group(3)
+			id = match.group(4)
+			post = match.group(5) if match.group(5) else None
+			if type == 'hilo':
+				self._show_thread(bot, id)
+				if post:
+					self._show_post(bot, post)
