@@ -9,6 +9,7 @@ Licensed under the Eiffel Forum License 2.
 import willie
 import requests
 import re
+import os
 from bs4 import BeautifulSoup
 
 BASE_URL = 'http://www.elotrolado.net/'
@@ -36,9 +37,92 @@ def manage_eol(bot, trigger):
 	"""Manage ElOtroLado system. For a list of commands, type: .eol help"""
 	bot.memory['eol_manager'].manage_eol(bot, trigger)
 
+@willie.module.commands('post')
+def manage_post(bot, trigger):
+	if not trigger.owner:
+		bot.say('no permission')
+		return
+	bot.memory['eol_manager'].post(bot)
+
 @willie.module.rule('.*(www.elotrolado.net)((/[\w-])*).*')
 def show_about_auto(bot, trigger):
 	bot.memory['eol_manager'].show_about(bot, trigger)
+
+class UserProfile:
+	def __init__(self, soup):
+		self.profile = dict()
+		self.wiki = dict()
+		tag = soup.find('form', {'id': 'viewprofile'}).find('dd') # user's title
+		if tag.string is not None:
+			self.profile['title'] = tag.string
+		tag = tag.find_next('span')	# username
+		self.profile['username'] = tag.string
+		tag = soup.find('div', {'class': 'column2'}).find('dd')	#registered
+		self.profile['registered'] = tag.string
+		tag = tag.find_next('dd')	# last seen
+		string = tag.string.strip()
+		if string != '' or string != '-':
+			self.profile['last_seen'] = string
+		tag = tag.find_next('dd').a		# messages
+		self.profile['messages'] = tag.string
+		tag = tag.find_next('div', {'class': 'column2'}).find('dd')
+		if tag is not None:	# there is wiki info
+			self.wiki['most_edited'] = tag.text	# most edited articles
+			tag = tag.find_next('dd').a		# last edited
+			self.wiki['last_edited'] = tag.text
+			tag = tag.find_next('dd')		# wiki stats
+			self.wiki['stats'] = tag.text
+
+	def __unicode__(self):
+		string = self.profile['username']
+		if 'title' in self.profile:
+			string = string + " :: " + self.profile['title']
+		string = string + " | Registrado: " + self.profile['registered']
+		if 'last_seen' in self.profile:
+			string = string + " | Ultima vez: " + self.profile['last_seen']
+		string = string + " | " + self.profile['messages']
+		if 'stats' in self.wiki:
+			string = string + "\n" + self.wiki['stats'] + " | Mas editado: " + self.wiki['most_edited'] + " | Ultimo editado: " + self.wiki['last_edited']
+		return string
+
+class Thread:
+	def __init__(self, soup):
+		self.thread = dict()
+		self.thread['title'] = soup.find('h1').find('a').string.strip()
+		forums = []
+		for a in soup.find('h3').find_all('a'):
+			forums.append(a.string)
+		self.thread['forums'] = forums
+		self.thread['author'] = soup.find('div', {'class': 'postuser'}).find('a').string.strip()
+		match = re.match(r'.*\s(\d+\smensajes?)', soup.find('div', {'class': 'pagination'}).text)
+		if match:
+			self.thread['messages'] = match.group(1)
+
+	def __unicode__(self):
+		return "Hilo: " + self.thread['title'] + " | Foro: " + ', '.join(self.thread['forums']) + " | Autor: " + self.thread['author']
+
+class Post:
+	def __init__(self, soup):
+		self.post = dict()
+		self.post['author'] = soup.find('div', {'class': 'postuser'}).find('a').string.strip()
+		self.post['date'] = soup.find('div', {'class': 'postuser'}).find('p').text.strip()
+		body = soup.find('div', {'class' : 'postbody'})
+		for tag in body.findAll('div'):
+			tag.unwrap()
+		for tag in body.findAll('blockquote'):		
+			tag.extract()
+		for tag in body.findAll('dl', {'class': 'codebox'}):
+			tag.extract()
+		for tag in body.findAll('br'):
+			tag.replace_with('\n')
+		self.post['body'] = re.sub('\n+', '\n', unicode(body.text.strip())).split('\n')
+				
+		
+	def __unicode__(self):
+		string = 'Post | Autor: ' + self.post['author'] + ' | Posteado el: ' + self.post['date']
+		for line in self.post['body'][0:2]:
+			string = string + '\n\t' + line
+		return string
 
 class EolManager:
 	def __init__(self, bot):
@@ -98,30 +182,10 @@ class EolManager:
 			self._login(bot)
 			self._eol_who(bot, trigger)
 			return
+
 		soup = BeautifulSoup(response.text)
-		tag = soup.find('form', {'id': 'viewprofile'}).find('dd') # user's title
-		if tag.string is None:
-			string = ""
-		else:
-			string = " :: " + tag.string
-		tag = tag.find_next('span')	# username
-		string = tag.string + string
-		tag = soup.find('div', {'class': 'column2'}) # user details
-		tag = tag.find('dd')	# registered
-		string = string + " | Registered: " + tag.string
-		tag = tag.find_next('dd') # last seen
-		string = string + " | Ultima vez: " + tag.string
-		tag = tag.find_next('dd').a
-		string = string + " | Mensajes: " + tag.string
-		tag = tag.find_next('div', {'class': 'column2'}) # wiki details
-		tag = tag.find('dd')	# most_edited
-		if tag is not None:	# there is wiki info
-			string2 = "Mas editado: " + tag.text
-			tag = tag.find_next('dd').a	#last edited
-			string2 = string2 + " | Ultimo editado: " + tag.text
-			tag = tag.find_next('dd')	#wiki stats
-			string = string + "\n" + tag.text + " | " + string2
-		for line in string.split('\n'):
+		profile = UserProfile(soup)
+		for line in unicode(profile).split('\n'):
 			bot.say(SAY_PREFIX + line)
 
 	def _eol_thread(self, bot, trigger):
@@ -163,16 +227,9 @@ class EolManager:
 			bot.say(SAY_PREFIX + "No tengo permiso para ver ese hilo")
 			return
 		soup = BeautifulSoup(response.text)
-		string = SAY_PREFIX + "Hilo: " + soup.find('h1').find('a').string.strip()
-		forums = []
-		for a in soup.find('h3').find_all('a'):
-			forums.append(a.string)
-		string = string + " | Foro: " + ', '.join(forums)
-		string = string + " | Autor: " + soup.find('div', {'class': 'postuser'}).find('a').string.strip()
-		match = re.match(r'.*\s(\d+\smensajes?)', soup.find('div', {'class': 'pagination'}).text)
-		if match:
-			string = string + " | " + match.group(1)
-		bot.say(string)
+		thread = Thread(soup)
+		for line in unicode(thread).split('\n'):
+			bot.say(SAY_PREFIX + line)
 
 	def _show_post(self, bot, post):
 		params = { 'p': str(post) }
@@ -184,26 +241,9 @@ class EolManager:
 			bot.say(SAY_PREFIX + "No tengo permiso para ver ese post")
 			return
 		soup = BeautifulSoup(response.text)
-		post = soup.find('div', {'id': 'p' + post})
-		string = "Post | Autor: " + post.find('div', {'class': 'postuser'}).find('a').string
-		string = string + " | Posteado el: " + post.find('div', {'class': 'postuser'}).find('p').text
-		body = post.find('div', {'class': 'postbody'})
-		for tag in body.findAll('div'):
-			tag.unwrap()
-		for tag in body.findAll('blockquote'):		
-			tag.extract()
-		for tag in body.findAll('dl', {'class': 'codebox'}):
-			tag.extract()
-		for tag in body.findAll('br'):
-			tag.replace_with('\n')
-		post_list = re.sub('\n+', '\n', unicode(body.text.strip())).split('\n')
-		
-		for line in string.split('\n'):
+		post = Post(soup.find('div', {'id': 'p' + post}))
+		for line in unicode(post).split('\n'):
 			bot.say(SAY_PREFIX + line)
-		for line in post_list[0:int(bot.config.eol.lines_to_show)]:
-			bot.say(SAY_PREFIX + "\t" + line)
-		if len(post_list) > int(bot.config.eol.lines_to_show):
-			bot.say(SAY_PREFIX + "\t(...)")
 
 	def _login(self, bot):
 		response = self.session.get(BASE_URL + 'foro_playstation-4_204')
@@ -213,7 +253,6 @@ class EolManager:
 		params = { 'mode' : 'login' }
 		formdata = { 'username' : bot.config.eol.username, 'password' : bot.config.eol.password, 'sid' : sid, 'autologin' : 'on', 'redirect': 'ucp.php', 'login': 'Identificarse' }
 		response = self.session.post(BASE_URL + 'ucp.php', params=params, data=formdata)
-		
 
 	def show_about(self, bot, trigger):
 		pattern = r'''
