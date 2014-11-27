@@ -115,7 +115,7 @@ class Talking:
 			self._show_doc(bot, 'start')
 			return
 
-		action = math.group(1).lower()
+		action = match.group(1).lower()
 		setattr(self,action,False)
 		bot.reply("I'm not " + action)
 
