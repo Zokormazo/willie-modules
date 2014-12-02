@@ -11,6 +11,8 @@ import requests
 import re
 import os
 from bs4 import BeautifulSoup
+from collections import OrderedDict
+from time import sleep
 
 BASE_URL = 'http://www.elotrolado.net/'
 SAY_PREFIX = '[EOL] '
@@ -36,13 +38,6 @@ def setup(bot):
 def manage_eol(bot, trigger):
 	"""Manage ElOtroLado system. For a list of commands, type: .eol help"""
 	bot.memory['eol_manager'].manage_eol(bot, trigger)
-
-@willie.module.commands('post')
-def manage_post(bot, trigger):
-	if not trigger.owner:
-		bot.say('no permission')
-		return
-	bot.memory['eol_manager'].post(bot)
 
 @willie.module.rule('.*(www.elotrolado.net)((/[\w-])*).*')
 def show_about_auto(bot, trigger):
@@ -130,6 +125,25 @@ class EolManager:
 		self.session = requests.Session()
 		self.session.headers.update({'User-Agent': 'Braulio el bot de Zokormazo 0.1-git'})
 		self._login(bot)
+		self.filename = os.path.join(bot.config.dotdir, 'eol.option')
+		self.thread_title = bot.config.eol.thread_title
+		if not os.path.exists(self.filename):
+			try:
+				f = open(self.filename, 'w')
+			except OSError:
+				pass
+			else:
+				f.write('')
+				f.close()
+				self.thread = ''
+		else:
+			try:
+				f = open(self.filename, 'r')
+			except OSError:
+				pass
+			else:
+				self.thread = f.readline().split('\n')[0]
+				f.close()
 
 	def _show_doc(self, bot, command):
 		"""Given an RSS command, say the docstring for the corresponding method."""
@@ -253,6 +267,65 @@ class EolManager:
 		params = { 'mode' : 'login' }
 		formdata = { 'username' : bot.config.eol.username, 'password' : bot.config.eol.password, 'sid' : sid, 'autologin' : 'on', 'redirect': 'ucp.php', 'login': 'Identificarse' }
 		response = self.session.post(BASE_URL + 'ucp.php', params=params, data=formdata)
+
+	def _new_thread(self, message):
+		params = { 'mode' : 'post', 'f' : '21' }
+		response = self.session.get(BASE_URL + 'posting.php', params=params)
+		soup = BeautifulSoup(response.text)
+		formdata = OrderedDict([
+			('subject' , ('', 'El hilo de Don Braulio')),
+			('message' , ('', message)),
+			('lastclick' , ('', soup.find('input', {'name' : 'lastclick'})['value'])),
+			('post' , ('', 'Enviar')),
+			('attach_sig' , ('', 'on')),
+			('creation_time' , ('', soup.find('input', {'name' : 'creation_time'})['value'])),
+			('form_token' , ('', soup.find('input', {'name' : 'form_token'})['value'])),
+			('poll_title' , ('', '')),
+			('poll_option_text' , ('', '')),
+			('poll_max_options' , ('', '1')),
+			('poll_length' , ('', '0')),
+			('wiki' , ('', ''))
+		])
+		sleep(2)
+		response = self.session.post(BASE_URL + 'posting.php', params=params, files=formdata)
+		soup = BeautifulSoup(response.text)
+		self.thread = soup.find('div', {'class' : 'inner'}).find_next('a')['href'].split('t=')[1]
+		try:
+			f = open(self.filename, 'w')
+		except OSError:
+			pass
+		else:
+			f.write(self.thread)
+			f.close()
+
+		
+
+	def _new_reply(self, thread, message):
+		self.params = {'mode' : 'reply', 'f' : '21', 't' : thread}
+		response = self.session.get(BASE_URL + 'posting.php', params=self.params)
+		soup = BeautifulSoup(response.text)
+		self.formdata = OrderedDict([
+			('subject' , ('', '')),
+			('message' , ('', message)),
+			('topic_cur_post_id' , ('', soup.find('input', {'name' : 'topic_cur_post_id'})['value'])),
+			('lastclick' , ('', soup.find('input', {'name' : 'lastclick'})['value'])),
+			('post' , ('', 'Enviar')),
+			('attach_sig' , ('', 'on')),
+			('creation_time' , ('', soup.find('input', {'name' : 'creation_time'})['value'])),
+			('form_token' , ('', soup.find('input', {'name' : 'form_token'})['value']))
+		])
+		sleep(2)
+		self.response = self.session.post(BASE_URL + 'posting.php', params=self.params, files=self.formdata)
+
+	def post(self, message):
+		if self.thread is None or self.thread == '':
+			self._new_thread(message)
+		else:
+			if self.session.get(BASE_URL + 'hilo__' + self.thread).status_code == requests.codes.ok:
+				self._new_reply(self.thread, message)
+			else:
+				self._new_thread(message)
+			
 
 	def show_about(self, bot, trigger):
 		pattern = r'''
