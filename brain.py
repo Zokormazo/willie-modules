@@ -6,7 +6,6 @@ Copyright 2014, Julen Landa Alustiza
 Licensed under the Eiffel Forum License 2.
 """
 
-import random
 import willie
 import re
 import os
@@ -34,8 +33,6 @@ class Talking:
 	def __init__(self, bot):
 		self.talking = True
 		self.learning = True
-		self.random = True
-		self.randomTalk = 0
 		self.brainTalking = bot.config.brain.learn
 		self.actions = sorted(method[7:] for method in dir(self) if method[:7] == '_brain_')
 		self.brains = []
@@ -175,10 +172,9 @@ class Talking:
 	def _talk(self, bot, trigger):
 		if trigger.nick == bot.nick or trigger.nick.lower() in bot.config.brain.get_list('ignored_users') or trigger[0] == '.' :
 			return
-		if self.randomTalk > 0 or bot.nick.lower() in trigger.lower() :
+		if bot.nick.lower() in trigger.lower() :
 			text = re.sub(r"^" + bot.nick + "[,:] *", '', trigger).encode('utf-8')
 			bot.say(Brain(bot.config.brain.path + self.brainTalking + '.brain').reply(text).replace(bot.nick,trigger.nick))
-			self.randomTalk = self.randomTalk -1
 
 	def trigger(self, bot, trigger):
 		if self.talking :
