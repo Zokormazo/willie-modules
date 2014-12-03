@@ -218,6 +218,8 @@ class GreetManager:
 			bot.reply("Available greeter commands: " + ', '.join(self.actions))
 
 	def greet(self, bot, trigger):
+		if bot.nick == trigger.nick:
+			return
 		conn = bot.db.connect()
 		cursor = conn.cursor()
 		nickname = trigger.nick.lower()
