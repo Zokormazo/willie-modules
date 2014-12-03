@@ -17,6 +17,8 @@ from time import sleep
 BASE_URL = 'http://www.elotrolado.net/'
 SAY_PREFIX = '[EOL] '
 
+__version__ = '0.1-git'
+
 def configure(config):
 	"""
 	| [eol] | example | purpose |
@@ -123,7 +125,7 @@ class EolManager:
 	def __init__(self, bot):
 		self.actions = sorted(method[5:] for method in dir(self) if method[:5] == '_eol_')
 		self.session = requests.Session()
-		self.session.headers.update({'User-Agent': 'Braulio el bot de Zokormazo 0.1-git'})
+		self.session.headers.update({'User-Agent': 'Braulio el bot de Zokormazo ' + __version__})
 		self._login(bot)
 		self.filename = os.path.join(bot.config.dotdir, 'eol.option')
 		self.thread_title = bot.config.eol.thread_title
@@ -146,7 +148,7 @@ class EolManager:
 				f.close()
 
 	def _show_doc(self, bot, command):
-		"""Given an RSS command, say the docstring for the corresponding method."""
+		"""Given an eol command, say the docstring for the corresponding method."""
 		for line in getattr(self, '_eol_' + command).__doc__.split('\n'):
 			line = line.strip()
 			if line:
@@ -187,7 +189,7 @@ class EolManager:
 			return
 
 		username = match.group(1).replace('"','')
-		params = { 'mode': 'viewprofile', 'mention': '1', 'un': username }
+		params = { 'mode': 'viewprofile', 'un': username }
 		response = self.session.get(BASE_URL + 'memberlist.php', params=params)
 		if response.status_code == 404:
 			bot.say('Usuario no encontrado')
@@ -272,22 +274,17 @@ class EolManager:
 		params = { 'mode' : 'post', 'f' : '21' }
 		response = self.session.get(BASE_URL + 'posting.php', params=params)
 		soup = BeautifulSoup(response.text)
-		formdata = OrderedDict([
-			('subject' , ('', 'El hilo de Don Braulio')),
-			('message' , ('', message)),
-			('lastclick' , ('', soup.find('input', {'name' : 'lastclick'})['value'])),
-			('post' , ('', 'Enviar')),
-			('attach_sig' , ('', 'on')),
-			('creation_time' , ('', soup.find('input', {'name' : 'creation_time'})['value'])),
-			('form_token' , ('', soup.find('input', {'name' : 'form_token'})['value'])),
-			('poll_title' , ('', '')),
-			('poll_option_text' , ('', '')),
-			('poll_max_options' , ('', '1')),
-			('poll_length' , ('', '0')),
-			('wiki' , ('', ''))
-		])
+		formdata = {
+			'subject' : 'El hilo de Don Braulio',
+			'message' : message,
+			'lastclick' : soup.find('input', {'name' : 'lastclick'})['value'],
+			'post' : 'Enviar',
+			'attach_sig' : 'on',
+			'creation_time' : soup.find('input', {'name' : 'creation_time'})['value'],
+			'form_token' : soup.find('input', {'name' : 'form_token'})['value'],
+		}
 		sleep(2)
-		response = self.session.post(BASE_URL + 'posting.php', params=params, files=formdata)
+		response = self.session.post(BASE_URL + 'posting.php', params=params, data=formdata)
 		soup = BeautifulSoup(response.text)
 		self.thread = soup.find('div', {'class' : 'inner'}).find_next('a')['href'].split('t=')[1]
 		try:
@@ -298,24 +295,21 @@ class EolManager:
 			f.write(self.thread)
 			f.close()
 
-		
-
 	def _new_reply(self, thread, message):
-		self.params = {'mode' : 'reply', 'f' : '21', 't' : thread}
-		response = self.session.get(BASE_URL + 'posting.php', params=self.params)
+		params = {'mode' : 'reply', 'f' : '21', 't' : thread}
+		response = self.session.get(BASE_URL + 'posting.php', params=params)
 		soup = BeautifulSoup(response.text)
-		self.formdata = OrderedDict([
-			('subject' , ('', '')),
-			('message' , ('', message)),
-			('topic_cur_post_id' , ('', soup.find('input', {'name' : 'topic_cur_post_id'})['value'])),
-			('lastclick' , ('', soup.find('input', {'name' : 'lastclick'})['value'])),
-			('post' , ('', 'Enviar')),
-			('attach_sig' , ('', 'on')),
-			('creation_time' , ('', soup.find('input', {'name' : 'creation_time'})['value'])),
-			('form_token' , ('', soup.find('input', {'name' : 'form_token'})['value']))
-		])
+		formdata = {
+			'message' : message,
+			'topic_cur_post_id' : soup.find('input', {'name' : 'topic_cur_post_id'})['value'],
+			'lastclick' : soup.find('input', {'name' : 'lastclick'})['value'],
+			'post' : 'Enviar',
+			'attach_sig' : 'on',
+			'creation_time' : soup.find('input', {'name' : 'creation_time'})['value'],
+			'form_token' : soup.find('input', {'name' : 'form_token'})['value']
+		}
 		sleep(2)
-		self.response = self.session.post(BASE_URL + 'posting.php', params=self.params, files=self.formdata)
+		response = self.session.post(BASE_URL + 'posting.php', params=params, data=formdata)
 
 	def post(self, message):
 		if self.thread is None or self.thread == '':
@@ -326,7 +320,6 @@ class EolManager:
 			else:
 				self._new_thread(message)
 			
-
 	def show_about(self, bot, trigger):
 		pattern = r'''
 			(.*\s)?
