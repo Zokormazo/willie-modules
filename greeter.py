@@ -224,7 +224,7 @@ class GreetManager:
 			'''.format(self.sub), {"channel": channel, "nickname": nickname})
 		greeting = cursor.fetchone()
 		if greeting:
-			text = greeting[2].replace("<nickname>",trigger.nick)
+			text = greeting[3].replace("<nickname>",trigger.nick)
 			bot.say(text)
 		else:
 			nickname = 'default'
