@@ -285,13 +285,12 @@ class EolManager:
 		formdata = {
 			'subject' : 'El hilo de Don Braulio',
 			'message' : message,
-			'lastclick' : soup.find('input', {'name' : 'lastclick'})['value'],
+			'lastclick' : str(int(soup.find('input', {'name' : 'lastclick'})['value']) - 2),
 			'post' : 'Enviar',
 			'attach_sig' : 'on',
 			'creation_time' : soup.find('input', {'name' : 'creation_time'})['value'],
 			'form_token' : soup.find('input', {'name' : 'form_token'})['value'],
 		}
-		sleep(2)
 		response = self.session.post(BASE_URL + 'posting.php', params=params, data=formdata)
 		soup = BeautifulSoup(response.text)
 		self.thread = soup.find('div', {'class' : 'inner'}).find_next('a')['href'].split('t=')[1]
@@ -308,13 +307,12 @@ class EolManager:
 		formdata = {
 			'message' : message,
 			'topic_cur_post_id' : soup.find('input', {'name' : 'topic_cur_post_id'})['value'],
-			'lastclick' : soup.find('input', {'name' : 'lastclick'})['value'],
+			'lastclick' : str(int(soup.find('input', {'name' : 'lastclick'})['value']) - 2),
 			'post' : 'Enviar',
 			'attach_sig' : 'on',
 			'creation_time' : soup.find('input', {'name' : 'creation_time'})['value'],
 			'form_token' : soup.find('input', {'name' : 'form_token'})['value']
 		}
-		sleep(2)
 		response = self.session.post(BASE_URL + 'posting.php', params=params, data=formdata)
 		soup = BeautifulSoup(response.text)
 		self.last_post = soup.find('div', {'class' : 'inner'}).find_next('a')['href'].split('#p')[1]
@@ -326,13 +324,12 @@ class EolManager:
 		soup = BeautifulSoup(response.text)
 		formdata = {
 			'message' : soup.find('textarea', {'name' : 'message'}).string + '\n\nEDIT:\n\n' + message,
-			'lastclick' : soup.find('input', {'name' : 'lastclick'})['value'],
+			'lastclick' : str(int(soup.find('input', {'name' : 'lastclick'})['value']) - 2),
 			'post' : 'Enviar',
 			'attach_sig' : 'on',
 			'creation_time' : soup.find('input', {'name' : 'creation_time'})['value'],
 			'form_token' : soup.find('input', {'name' : 'form_token'})['value']
 		}
-		sleep(2)
 		response = self.session.post(BASE_URL + 'posting.php', params=params, data=formdata)
 
 	def post(self, message):
