@@ -129,15 +129,12 @@ class EolManager:
 		self._login(bot)
 		self.filename = os.path.join(bot.config.dotdir, 'eol.option')
 		self.thread_title = bot.config.eol.thread_title
+		self._read_config()
+
+	def _read_config(self):
 		if not os.path.exists(self.filename):
-			try:
-				f = open(self.filename, 'w')
-			except OSError:
-				pass
-			else:
-				f.write('')
-				f.close()
-				self.thread = ''
+			self.thread = ''
+			self.last_post = ''
 		else:
 			try:
 				f = open(self.filename, 'r')
@@ -145,7 +142,18 @@ class EolManager:
 				pass
 			else:
 				self.thread = f.readline().split('\n')[0]
+				self.last_post = f.readline().split('\n')[0]
 				f.close()
+
+	def _write_config(self):
+		try:
+			f = open(self.filename, 'w')
+		except OSError:
+			pass
+		else:
+			f.write(self.thread + '\n' + self.last_post)
+			f.close()
+
 
 	def _show_doc(self, bot, command):
 		"""Given an eol command, say the docstring for the corresponding method."""
@@ -287,21 +295,37 @@ class EolManager:
 		response = self.session.post(BASE_URL + 'posting.php', params=params, data=formdata)
 		soup = BeautifulSoup(response.text)
 		self.thread = soup.find('div', {'class' : 'inner'}).find_next('a')['href'].split('t=')[1]
-		try:
-			f = open(self.filename, 'w')
-		except OSError:
-			pass
-		else:
-			f.write(self.thread)
-			f.close()
+		self._write_config()
 
 	def _new_reply(self, thread, message):
 		params = {'mode' : 'reply', 'f' : '21', 't' : thread}
 		response = self.session.get(BASE_URL + 'posting.php', params=params)
+		if 'Lo sentimos' in response.text:
+			# double posting, edit instead of reply
+			self._edit_post(self.last_post, message)
+			return
 		soup = BeautifulSoup(response.text)
 		formdata = {
 			'message' : message,
 			'topic_cur_post_id' : soup.find('input', {'name' : 'topic_cur_post_id'})['value'],
+			'lastclick' : soup.find('input', {'name' : 'lastclick'})['value'],
+			'post' : 'Enviar',
+			'attach_sig' : 'on',
+			'creation_time' : soup.find('input', {'name' : 'creation_time'})['value'],
+			'form_token' : soup.find('input', {'name' : 'form_token'})['value']
+		}
+		sleep(2)
+		response = self.session.post(BASE_URL + 'posting.php', params=params, data=formdata)
+		soup = BeautifulSoup(response.text)
+		self.last_post = soup.find('div', {'class' : 'inner'}).find_next('a')['href'].split('#p')[1]
+		self._write_config()
+
+	def _edit_post(self, post, message):
+		params = {'mode' : 'edit', 'f' : '21', 'p' : post}
+		response = self.session.get(BASE_URL + 'posting.php', params=params)
+		soup = BeautifulSoup(response.text)
+		formdata = {
+			'message' : soup.find('textarea', {'name' : 'message'}).string + '\n\nEDIT:\n\n' + message,
 			'lastclick' : soup.find('input', {'name' : 'lastclick'})['value'],
 			'post' : 'Enviar',
 			'attach_sig' : 'on',
