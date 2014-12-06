@@ -18,6 +18,7 @@ BASE_URL = 'http://www.elotrolado.net/'
 SAY_PREFIX = '[EOL] '
 
 __version__ = '0.1-git'
+regex = re.compile('.*(www.elotrolado.net)(([\w-]*).*)')
 
 def configure(config):
 	"""
@@ -35,6 +36,10 @@ def configure(config):
 
 def setup(bot):
 	bot.memory['eol_manager'] = EolManager(bot)
+	if not bot.memory.contains('url_callbacks'):
+		bot.memory['url_callbacks'] = tools.WillieMemory()
+	bot.memory['url_callbacks'][regex] = show_about_auto
+
 
 @willie.module.commands('eol')
 def manage_eol(bot, trigger):
@@ -324,15 +329,18 @@ class EolManager:
 		soup = BeautifulSoup(response.text)
 		formdata = {
 			'message' : soup.find('textarea', {'name' : 'message'}).string + '\n\nEDIT:\n\n' + message,
-			'lastclick' : str(int(soup.find('input', {'name' : 'lastclick'})['value']) - 2),
+			'lastclick' : soup.find('input', {'name' : 'lastclick'})['value'],
 			'post' : 'Enviar',
 			'attach_sig' : 'on',
 			'creation_time' : soup.find('input', {'name' : 'creation_time'})['value'],
 			'form_token' : soup.find('input', {'name' : 'form_token'})['value']
 		}
+		sleep(2)
 		response = self.session.post(BASE_URL + 'posting.php', params=params, data=formdata)
 
 	def post(self, message):
+		if message == '':
+			return
 		if self.thread is None or self.thread == '':
 			self._new_thread(message)
 		else:
