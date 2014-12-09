@@ -286,57 +286,77 @@ class EolManager:
 	def _new_thread(self, message):
 		params = { 'mode' : 'post', 'f' : '21' }
 		response = self.session.get(BASE_URL + 'posting.php', params=params)
+		if response.status_code != requests.code.ok:
+			return False
 		soup = BeautifulSoup(response.text)
 		formdata = {
 			'subject' : 'El hilo de Don Braulio',
 			'message' : message,
-			'lastclick' : str(int(soup.find('input', {'name' : 'lastclick'})['value']) - 2),
 			'post' : 'Enviar',
 			'attach_sig' : 'on',
-			'creation_time' : soup.find('input', {'name' : 'creation_time'})['value'],
-			'form_token' : soup.find('input', {'name' : 'form_token'})['value'],
 		}
+		for input in soup.find('form', {'id' : 'postform'}).find_all('input', { 'type' : 'hidden' }):
+			formdata[input['name']] = input['value']
+		sleep(2)
 		response = self.session.post(BASE_URL + 'posting.php', params=params, data=formdata)
+		if response.status_code != requests.code.ok:
+			return False
 		soup = BeautifulSoup(response.text)
-		self.thread = soup.find('div', {'class' : 'inner'}).find_next('a')['href'].split('t=')[1]
+		link = soup.find('div', {'class' : 'inner'}).find_next('a')['href']
+		self.thread = link.split('t=')[1]
+		response = self.session.get(BASE_URL + link)
+		if response.status_code != requests.code.ok:
+			return False
+		soup = BeautifulSoup(response.text)
+		self.last_post = soup.find('div', {'class' : 'post bg2'})['id'][1:]
 		self._write_config()
+		return True
 
 	def _new_reply(self, thread, message):
 		params = {'mode' : 'reply', 'f' : '21', 't' : thread}
 		response = self.session.get(BASE_URL + 'posting.php', params=params)
+		if response.status_code != requests.code.ok:
+			return False
 		if 'Lo sentimos' in response.text:
 			# double posting, edit instead of reply
 			self._edit_post(self.last_post, message)
-			return
+			return False
 		soup = BeautifulSoup(response.text)
 		formdata = {
 			'message' : message,
-			'topic_cur_post_id' : soup.find('input', {'name' : 'topic_cur_post_id'})['value'],
-			'lastclick' : str(int(soup.find('input', {'name' : 'lastclick'})['value']) - 2),
 			'post' : 'Enviar',
 			'attach_sig' : 'on',
-			'creation_time' : soup.find('input', {'name' : 'creation_time'})['value'],
-			'form_token' : soup.find('input', {'name' : 'form_token'})['value']
 		}
+		for input in soup.find('form', {'id' : 'postform'}).find_all('input', {'type': 'hidden'}):
+			formdata[input['name']] = input['value']
+		sleep(2)
 		response = self.session.post(BASE_URL + 'posting.php', params=params, data=formdata)
+		if response.status_code != requests.code.ok:
+			return False
 		soup = BeautifulSoup(response.text)
 		self.last_post = soup.find('div', {'class' : 'inner'}).find_next('a')['href'].split('#p')[1]
 		self._write_config()
+		return True
 
 	def _edit_post(self, post, message):
 		params = {'mode' : 'edit', 'f' : '21', 'p' : post}
 		response = self.session.get(BASE_URL + 'posting.php', params=params)
+		if response.status_code != requests.code.ok:
+			return False
 		soup = BeautifulSoup(response.text)
 		formdata = {
 			'message' : soup.find('textarea', {'name' : 'message'}).string + '\n\nEDIT:\n\n' + message,
-			'lastclick' : soup.find('input', {'name' : 'lastclick'})['value'],
 			'post' : 'Enviar',
 			'attach_sig' : 'on',
-			'creation_time' : soup.find('input', {'name' : 'creation_time'})['value'],
-			'form_token' : soup.find('input', {'name' : 'form_token'})['value']
 		}
+		for input in soup.find('form', {'id' : 'postform'}).find_all('input', {'type' : 'hidden'}):
+			formdata[input['name']] = input['value']
+		subject = soup.find('input', {'id': 'subject'})
+		if subject is not None:
+			formdata['subject'] = subject['value']
 		sleep(2)
 		response = self.session.post(BASE_URL + 'posting.php', params=params, data=formdata)
+		return True
 
 	def post(self, message):
 		if message == '':
@@ -368,7 +388,12 @@ class EolManager:
 				'''
 			match = re.match(pattern, trigger.group(), re.IGNORECASE | re.VERBOSE)
 			if match is not None:
-				self._show_post(bot, match.group(3))
+				params = { 'p' : match.group(3) }
+				response = self.session.get(BASE_URL + 'viewtopic.php', params=params, allow_redirects=False)
+				if response.status_code == 301:
+					args = response.headers['location'].split("=")
+					self._show_thread(bot, args[2])
+					self._show_post(bot, args[1][:-2])
 		else:
 			type = match.group(3)
 			id = match.group(4)
