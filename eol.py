@@ -18,7 +18,12 @@ BASE_URL = 'http://www.elotrolado.net/'
 SAY_PREFIX = '[EOL] '
 
 __version__ = '0.1-git'
-regex = re.compile('.*(www.elotrolado.net)(([\w-]*).*)')
+regexes = {
+	'thread' : re.compile('(?:http://www\.elotrolado\.net/hilo_[\a-z0-9\-]*_)(\d+)(?:_s\d+)?(?:\#p(\d+))?'),
+	'new' : re.compile('(?:http://www\.elotrolado\.net/noticia_[\a-z0-9\-]*_)(\d+)'),
+	'viewtopic' : re.compile('(?:http://www\.elotrolado\.net/viewtopic\.php\?p=)(\d+)'),
+	'viewprofile' : re.compile('(?:http://www\.elotrolado\.net/memberlist.php\?mode=viewprofile\&u=)(\d+)')
+}
 
 def configure(config):
 	"""
@@ -38,17 +43,57 @@ def setup(bot):
 	bot.memory['eol_manager'] = EolManager(bot)
 	if not bot.memory.contains('url_callbacks'):
 		bot.memory['url_callbacks'] = tools.WillieMemory()
-	bot.memory['url_callbacks'][regex] = show_about_auto
+	bot.memory['url_callbacks'][regexes['thread']] = show_about_thread
+	bot.memory['url_callbacks'][regexes['new']] = show_about_new
+	bot.memory['url_callbacks'][regexes['viewtopic']] = show_about_viewtopic
+	bot.memory['url_callbacks'][regexes['viewprofile']] = show_about_viewprofile
 
+@willie.module.commands('who')
+@willie.module.example('.who melado') 
+def who(bot, trigger):
+	"""Show profile info"""
+	if not trigger.group(2):
+		return
+	bot.memory['eol_manager']._show_profile(bot,trigger.group(2))
 
-@willie.module.commands('eol')
-def manage_eol(bot, trigger):
-	"""Manage ElOtroLado system. For a list of commands, type: .eol help"""
-	bot.memory['eol_manager'].manage_eol(bot, trigger)
+@willie.module.rule('.*(?:http://www\.elotrolado\.net/hilo_[a-z0-9\-]*_)(\d+)(?:_s\d+)?(?:\#p(\d+))?')
+def show_about_thread(bot, trigger, found_match=None):
+	"""
+	Get information about thread and/or post from hilo_ link
+	"""
+	match = found_match or trigger
+	if match:
+		bot.memory['eol_manager']._show_thread(bot,match.group(1))
+		if match.group(2):
+			bot.memory['eol_manager']._show_post(bot,match.group(2))
 
-@willie.module.rule('.*(www.elotrolado.net)((/[\w-])*).*')
-def show_about_auto(bot, trigger):
-	bot.memory['eol_manager'].show_about(bot, trigger)
+@willie.module.rule('.*(?:http://www\.elotrolado\.net/noticia_[a-z0-9\-]*_)(\d+)')
+def show_about_new(bot, trigger, found_match=None):
+	"""
+	Get information about new from noticia_ link
+	"""
+	match = found_match or trigger
+	if match:
+		bot.memory['eol_manager']._show_new(bot, match.group(1))
+
+@willie.module.rule('.*(?:http://www\.elotrolado\.net/viewtopic\.php\?p=)(\d+)')
+def show_about_viewtopic(bot, trigger, found_match=None):
+	"""
+	Get information about thread and post from viewtopic.php link
+	"""
+	match = found_match or trigger
+	if match:
+		bot.memory['eol_manager']._show_thread_from_post(bot, match.group(1))
+		bot.memory['eol_manager']._show_post(bot, match.group(1))
+
+@willie.module.rule('.*(?:http://www\.elotrolado\.net/memberlist.php\?mode=viewprofile&u=)(\d+)')
+def show_about_viewprofile(bot, trigger, found_match=None):
+	"""
+	Get information about profile from memberlist.php link
+	"""
+	match = found_match or trigger
+	if match:
+		bot.memory['eol_manager']._show_profile(bot, match.group(1))
 
 class UserProfile:
 	def __init__(self, soup):
@@ -84,7 +129,7 @@ class UserProfile:
 			string = string + " | Ultima vez: " + self.profile['last_seen']
 		string = string + " | " + self.profile['messages']
 		if 'stats' in self.wiki:
-			string = string + "\n" + self.wiki['stats'] + " | Mas editado: " + self.wiki['most_edited'] + " | Ultimo editado: " + self.wiki['last_edited']
+			string = string + '\n' + self.wiki['stats'] + ' | Mas editado: ' + self.wiki['most_edited'] + ' | Ultimo editado: ' + self.wiki['last_edited']
 		return string
 
 class Thread:
@@ -101,7 +146,7 @@ class Thread:
 			self.thread['messages'] = match.group(1)
 
 	def __unicode__(self):
-		return "Hilo: " + self.thread['title'] + " | Foro: " + ', '.join(self.thread['forums']) + " | Autor: " + self.thread['author']
+		return 'Hilo: ' + self.thread['title'] + ' | Foro: ' + ', '.join(self.thread['forums']) + ' | Autor: ' + self.thread['author']
 
 class Post:
 	def __init__(self, soup):
@@ -125,6 +170,18 @@ class Post:
 		for line in self.post['body'][0:2]:
 			string = string + '\n\t' + line
 		return string
+
+class New:
+	def __init__(self, soup):
+		self.new = dict()
+		self.new['title'] = soup.find('h3').find('a').string.strip()
+		notimeta = soup.find('p', {'class': 'notimeta'})
+		self.new['author'] = notimeta.find('strong').string.strip()
+		self.new['category'] = notimeta.find('a').string.strip()
+		self.new['comments'] = notimeta.find('a').find_next('a').string.strip()
+
+	def __unicode__(self):
+		return 'Noticia: ' + self.new['title'] + ' | Categoria: ' + self.new['category'] + ' | Autor: ' + self.new['author'] + ' | ' + self.new['comments']
 
 class EolManager:
 	def __init__(self, bot):
@@ -177,101 +234,70 @@ class EolManager:
 		# run the function and commit database changes if it returns true
 		getattr(self, '_eol_' + text[1])(bot, trigger)
 
-	def _eol_help(self, bot, trigger):
-		"""Get help on any of the EOL commands.
-		Usage: .eol help <command>
-		"""
-		command = trigger.group(4)
-		if command in self.actions:
-			self._show_doc(bot, command)
-		else:
-			bot.reply("For help on a command, type: .eol help <command>")
-			bot.reply("Available greeter commands: " + ', '.join(self.actions))
-
-	def _eol_who(self, bot, trigger):
-		""" Show user's EOL profile
-		Usage: .eol who <user> | .eol who "Username with special characters"
-		"""
-		pattern = r'''
-			^\.eol\s+who
-			\s+("[^"]+"|[\w-]+)	#username
-			'''
-		match = re.match(pattern, trigger.group(), re.IGNORECASE | re.VERBOSE)
-		if match is None:
-			self._show_doc(bot, 'who')
-			return
-
-		username = match.group(1).replace('"','')
-		params = { 'mode': 'viewprofile', 'un': username }
-		response = self.session.get(BASE_URL + 'memberlist.php', params=params)
-		if response.status_code == 404:
-			bot.say('Usuario no encontrado')
-			return
-		if response.status_code == 403:
-			self._login(bot)
-			self._eol_who(bot, trigger)
-			return
-
-		soup = BeautifulSoup(response.text)
-		profile = UserProfile(soup)
-		for line in unicode(profile).split('\n'):
-			bot.say(SAY_PREFIX + line)
-
-	def _eol_thread(self, bot, trigger):
-		""" Show thread
-		Usage: .eol thread <thread-number>
-		"""
-		pattern = r'''
-			^\.eol\s+thread
-			\s+([0-9]+)	#thread number
-			'''
-		match = re.match(pattern, trigger.group(), re.IGNORECASE | re.VERBOSE)
-		if match is None:
-			self._show_doc(bot, 'thread')
-			return
-		thread = match.group(1)
-		self._show_thread(bot, thread)
-
-	def _eol_post(self, bot, trigger):
-		""" Show post
-		Usage: .eol post <post-number>
-		"""
-		pattern = r'''
-			^\.eol\s+post
-			\s+([0-9]+)	#post number
-			'''
-		match = re.match(pattern, trigger.group(), re.IGNORECASE | re.VERBOSE)
-		if match is None:
-			self._show_doc(bot, 'post')
-			return
-		post = match.group(1)
-		self._show_post(bot, post)
-
 	def _show_thread(self, bot, thread):
-		response = self.session.get(BASE_URL + "hilo__" + str(thread))
+		response = self.session.get(BASE_URL + 'hilo__' + str(thread))
 		if response.status_code == 404:
-			bot.say(SAY_PREFIX + "Hilo no encontrado")
+			bot.say(SAY_PREFIX + 'Hilo no encontrado')
 			return
 		if response.status_code == 403:
-			bot.say(SAY_PREFIX + "No tengo permiso para ver ese hilo")
+			bot.say(SAY_PREFIX + 'No tengo permiso para ver ese hilo')
 			return
 		soup = BeautifulSoup(response.text)
 		thread = Thread(soup)
 		for line in unicode(thread).split('\n'):
 			bot.say(SAY_PREFIX + line)
 
+	def _show_thread_from_post(self, bot, post):
+		params = {'p' : post }
+		response = self.session.head(BASE_URL + 'viewtopic.php', params=params, allow_redirects = False)
+		if response.status_code == 301:
+			self._show_thread(bot, response.headers['location'].split("=")[2])
+
 	def _show_post(self, bot, post):
 		params = { 'p': str(post) }
-		response = self.session.get(BASE_URL + "viewtopic.php", params=params)
+		response = self.session.get(BASE_URL + 'viewtopic.php', params=params)
 		if response.status_code == 404:
 			bot.say(SAY_PREFIX + "Post no encontrado")
 			return
 		if response.status_code == 403:
-			bot.say(SAY_PREFIX + "No tengo permiso para ver ese post")
+			bot.say(SAY_PREFIX + 'No tengo permiso para ver ese post')
 			return
 		soup = BeautifulSoup(response.text)
 		post = Post(soup.find('div', {'id': 'p' + post}))
 		for line in unicode(post).split('\n'):
+			bot.say(SAY_PREFIX + line)
+
+	def _show_profile(self, bot, profile):
+		params = {
+			'mode' : 'viewprofile' ,
+		}
+		if profile.isdigit():
+			params['u'] = profile
+		else:
+			params['un'] = profile
+		response = self.session.get(BASE_URL + 'memberlist.php', params = params)
+		if response.status_code == 404:
+			bot.say('Usuario no encontrado')
+			return
+		if response.status_code == 403:
+			bot.say('No tengo permiso para ver este usuario')
+			return
+		if response.status_code == requests.codes.ok:
+			soup = BeautifulSoup(response.text)
+			profile = UserProfile(soup)
+			for line in unicode(profile).split('\n'):
+				bot.say(SAY_PREFIX + line)
+	def _show_new(self, bot, new):
+		response = self.session.get(BASE_URL + 'noticia__' + str(new))
+		if response.status_code == 404:
+			bot.say('Noticia no encontrada')
+			return
+		if response.status_code == 403:
+			bot.say('No tengo permiso para ver esa noticia')
+			return
+		soup = BeautifulSoup(response.text)
+		new = New(soup)
+		for line in unicode(new).split('\n'):
 			bot.say(SAY_PREFIX + line)
 
 	def _login(self, bot):
@@ -286,7 +312,7 @@ class EolManager:
 	def _new_thread(self, message):
 		params = { 'mode' : 'post', 'f' : '21' }
 		response = self.session.get(BASE_URL + 'posting.php', params=params)
-		if response.status_code != requests.code.ok:
+		if response.status_code != requests.codes.ok:
 			return False
 		soup = BeautifulSoup(response.text)
 		formdata = {
@@ -299,13 +325,13 @@ class EolManager:
 			formdata[input['name']] = input['value']
 		sleep(2)
 		response = self.session.post(BASE_URL + 'posting.php', params=params, data=formdata)
-		if response.status_code != requests.code.ok:
+		if response.status_code != requests.codes.ok:
 			return False
 		soup = BeautifulSoup(response.text)
 		link = soup.find('div', {'class' : 'inner'}).find_next('a')['href']
 		self.thread = link.split('t=')[1]
 		response = self.session.get(BASE_URL + link)
-		if response.status_code != requests.code.ok:
+		if response.status_code != requests.codes.ok:
 			return False
 		soup = BeautifulSoup(response.text)
 		self.last_post = soup.find('div', {'class' : 'post bg2'})['id'][1:]
@@ -315,7 +341,7 @@ class EolManager:
 	def _new_reply(self, thread, message):
 		params = {'mode' : 'reply', 'f' : '21', 't' : thread}
 		response = self.session.get(BASE_URL + 'posting.php', params=params)
-		if response.status_code != requests.code.ok:
+		if response.status_code != requests.codes.ok:
 			return False
 		if 'Lo sentimos' in response.text:
 			# double posting, edit instead of reply
@@ -331,7 +357,7 @@ class EolManager:
 			formdata[input['name']] = input['value']
 		sleep(2)
 		response = self.session.post(BASE_URL + 'posting.php', params=params, data=formdata)
-		if response.status_code != requests.code.ok:
+		if response.status_code != requests.codes.ok:
 			return False
 		soup = BeautifulSoup(response.text)
 		self.last_post = soup.find('div', {'class' : 'inner'}).find_next('a')['href'].split('#p')[1]
@@ -341,7 +367,7 @@ class EolManager:
 	def _edit_post(self, post, message):
 		params = {'mode' : 'edit', 'f' : '21', 'p' : post}
 		response = self.session.get(BASE_URL + 'posting.php', params=params)
-		if response.status_code != requests.code.ok:
+		if response.status_code != requests.codes.ok:
 			return False
 		soup = BeautifulSoup(response.text)
 		formdata = {
@@ -368,37 +394,4 @@ class EolManager:
 				self._new_reply(self.thread, message)
 			else:
 				self._new_thread(message)
-			
-	def show_about(self, bot, trigger):
-		pattern = r'''
-			(.*\s)?
-			(http://)?www\.elotrolado\.net/
-			([a-z]+)
-			_.*_
-			(\d+)
-			(?:_s\d+)?
-			(?:\#p(\d+))?
-			'''
-		match = re.match(pattern, trigger.group(), re.IGNORECASE | re.VERBOSE)
-		if match is None:
-			pattern = r'''
-				(.*\s)?
-				(http://)?www\.elotrolado\.net/viewtopic\.php\?p=
-				(\d+)
-				'''
-			match = re.match(pattern, trigger.group(), re.IGNORECASE | re.VERBOSE)
-			if match is not None:
-				params = { 'p' : match.group(3) }
-				response = self.session.head(BASE_URL + 'viewtopic.php', params=params, allow_redirects=False)
-				if response.status_code == 301:
-					args = response.headers['location'].split("=")
-					self._show_thread(bot, args[2])
-					self._show_post(bot, args[1][:-2])
-		else:
-			type = match.group(3)
-			id = match.group(4)
-			post = match.group(5) if match.group(5) else None
-			if type == 'hilo':
-				self._show_thread(bot, id)
-				if post:
-					self._show_post(bot, post)
+
