@@ -275,10 +275,10 @@ class EolManager:
 			bot.say(SAY_PREFIX + line)
 
 	def _login(self, bot):
-		response = self.session.get(BASE_URL + 'foro_playstation-4_204')
+		response = self.session.head(BASE_URL + 'foro_playstation-4_204')
 		sid = response.cookies['phpbb3_eol_sid']
 		params = { 'mode' : 'forcemobile', 'sid' : sid }
-		response = self.session.get(BASE_URL + 'rpc.php', params=params)
+		response = self.session.head(BASE_URL + 'rpc.php', params=params)
 		params = { 'mode' : 'login' }
 		formdata = { 'username' : bot.config.eol.username, 'password' : bot.config.eol.password, 'sid' : sid, 'autologin' : 'on', 'redirect': 'ucp.php', 'login': 'Identificarse' }
 		response = self.session.post(BASE_URL + 'ucp.php', params=params, data=formdata)
@@ -364,7 +364,7 @@ class EolManager:
 		if self.thread is None or self.thread == '':
 			self._new_thread(message)
 		else:
-			if self.session.get(BASE_URL + 'hilo__' + self.thread).status_code == requests.codes.ok:
+			if self.session.head(BASE_URL + 'hilo__' + self.thread).status_code == requests.codes.ok:
 				self._new_reply(self.thread, message)
 			else:
 				self._new_thread(message)
@@ -389,7 +389,7 @@ class EolManager:
 			match = re.match(pattern, trigger.group(), re.IGNORECASE | re.VERBOSE)
 			if match is not None:
 				params = { 'p' : match.group(3) }
-				response = self.session.get(BASE_URL + 'viewtopic.php', params=params, allow_redirects=False)
+				response = self.session.head(BASE_URL + 'viewtopic.php', params=params, allow_redirects=False)
 				if response.status_code == 301:
 					args = response.headers['location'].split("=")
 					self._show_thread(bot, args[2])
