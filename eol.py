@@ -49,7 +49,7 @@ def setup(bot):
 	bot.memory['url_callbacks'][regexes['viewprofile']] = show_about_viewprofile
 
 @willie.module.commands('who')
-@willie.module.example('.who melado') 
+@willie.module.example('.who melado')
 def who(bot, trigger):
 	"""Show profile info"""
 	if not trigger.group(2):
@@ -156,15 +156,15 @@ class Post:
 		body = soup.find('div', {'class' : 'postbody'})
 		for tag in body.findAll('div'):
 			tag.unwrap()
-		for tag in body.findAll('blockquote'):		
+		for tag in body.findAll('blockquote'):
 			tag.extract()
 		for tag in body.findAll('dl', {'class': 'codebox'}):
 			tag.extract()
 		for tag in body.findAll('br'):
 			tag.replace_with('\n')
 		self.post['body'] = re.sub('\n+', '\n', unicode(body.text.strip())).split('\n')
-				
-		
+
+
 	def __unicode__(self):
 		string = 'Post | Autor: ' + self.post['author'] + ' | Posteado el: ' + self.post['date']
 		for line in self.post['body'][0:2]:
@@ -387,6 +387,7 @@ class EolManager:
 	def post(self, message):
 		if message == '':
 			return
+		self._read_config()
 		if self.thread is None or self.thread == '':
 			self._new_thread(message)
 		else:
