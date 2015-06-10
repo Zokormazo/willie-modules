@@ -391,7 +391,7 @@ class EolManager:
 		if self.thread is None or self.thread == '':
 			self._new_thread(message)
 		else:
-			if self.session.head(BASE_URL + 'hilo__' + self.thread).status_code == requests.codes.ok:
+			if self.session.get(BASE_URL + 'hilo__' + self.thread).status_code == requests.codes.ok:
 				self._new_reply(self.thread, message)
 			else:
 				self._new_thread(message)
