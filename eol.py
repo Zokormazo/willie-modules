@@ -251,7 +251,7 @@ class EolManager:
 		params = {'p' : post }
 		response = self.session.head(BASE_URL + 'viewtopic.php', params=params, allow_redirects = False)
 		if response.status_code == 301:
-			self._show_thread(bot, response.headers['location'].split("=")[2])
+			self._show_thread(bot, response.headers['location'].split("=")[2].split("&")[0])
 
 	def _show_post(self, bot, post):
 		params = { 'p': str(post) }
