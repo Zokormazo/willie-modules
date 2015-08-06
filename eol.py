@@ -287,6 +287,8 @@ class EolManager:
 			profile = UserProfile(soup)
 			for line in unicode(profile).split('\n'):
 				bot.say(SAY_PREFIX + line)
+			bot.say(SAY_PREFIX + response.url)
+
 	def _show_new(self, bot, new):
 		response = self.session.get(BASE_URL + 'noticia__' + str(new))
 		if response.status_code == 404:
