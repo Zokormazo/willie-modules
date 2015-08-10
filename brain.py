@@ -1,33 +1,49 @@
 # coding=utf8
 """
-brain.py - Willie talking bot module
-Copyright 2014, Julen Landa Alustiza
+brain.py - Sopel talking bot module
+Copyright 2014-2015, Julen Landa Alustiza
 
 Licensed under the Eiffel Forum License 2.
 """
 
-import willie
+import sopel
+from sopel import tools
+from sopel.config.types import ValidatedAttribute, ListAttribute, StaticSection
 import re
 import os
 
 from cobe.brain import Brain
 
-def configure(config):
-	"""
-	| [brain] | example | purpose |
-	| -------- | ------- | ------- |
-	| path | ~/.willie/cobe/ | cobe brain directory path |
-	| learn | irc | cobe brain for learning |
-	| ignored_nicks | nick1, nick2 | nicks to ignore |
-	"""
-	if config.option('Configure brain module', False):
-		config.add_section('brain')
-		config.interactive_add('brain', 'path', 'directory path', '~/.willie/bot/')
-		config.interactive_add('brain', 'learn', 'cobe brain name' 'irc')
-		config.interactive_add('brain', 'ignored_nicks', 'nicks to ignore', '')
+class BrainSection(StaticSection):
+	path = ValidatedAttribute('path')
+	learn = ValidatedAttribute('learn', default='irc')
+	ignored_users = ListAttribute('ignored_users')
 
-def setup(bot):
-	bot.memory['talking'] = Talking(bot);
+def configure(config):
+	config.define_section('brain', BrainSection)
+	config.brain.configure_setting(
+		'path',
+		'cobe brains storage path'
+	)
+	config.brain.configure_setting(
+		'learn',
+		'Default learn brain'
+	)
+	config.brain.configure_setting(
+		'ignored_users',
+		'users to ignore'
+	)
+
+def setup(bot=None):
+	if not bot:
+		return
+	bot.config.define_section('brain', BrainSection)
+
+	if not bot.config.brain.path:
+		bot.config.brain.path = bot.config.core.homedir + "/cobe/"
+
+	if not bot.memory.contains('talking'):
+		bot.memory['talking'] = Talking(bot)
 
 class Talking:
 	def __init__(self, bot):
@@ -164,15 +180,19 @@ class Talking:
 
 
 	def _learn(self, bot, trigger):
-		if trigger.nick == bot.nick or trigger.nick.lower() in bot.config.brain.get_list('ignored_users') or trigger[0] == '.' :
+		if trigger.nick == bot.nick or trigger[0] == '.':
+			return
+		if trigger.nick.lower() in bot.config.brain.ignored_users:
 			return
 		text = trigger.replace(bot.nick + ":","").encode('utf-8')
 		Brain(bot.config.brain.path + bot.config.brain.learn + '.brain').learn(trigger.encode('utf-8'))
 
 	def _talk(self, bot, trigger):
-		if trigger.nick == bot.nick or trigger.nick.lower() in bot.config.brain.get_list('ignored_users') or trigger[0] == '.' :
+		if trigger.nick == bot.nick or trigger[0] == '.':
 			return
-		if bot.nick.lower() in trigger.lower() :
+		if trigger.nick.lower() in bot.config.brain.ignored_users:
+			return
+		if bot.nick.lower() in trigger.lower():
 			text = re.sub(r"^" + bot.nick + "[,:] *", '', trigger).encode('utf-8')
 			bot.say(Brain(bot.config.brain.path + self.brainTalking + '.brain').reply(text).replace(bot.nick,trigger.nick))
 
@@ -182,13 +202,15 @@ class Talking:
 		if self.learning :
 			self._learn(bot, trigger)
 
-@willie.module.commands('brain')
+@sopel.module.commands('brain')
 def manage_brain(bot, trigger):
 	"""Manage brain system. For a list of commands, type: .brain help"""
-	bot.memory['talking'].manage_brain(bot, trigger)
+	if bot.memory.contains('talking'):
+		bot.memory['talking'].manage_brain(bot, trigger)
 
 
-@willie.module.event('PRIVMSG')
-@willie.module.rule('(.*)')
+@sopel.module.event('PRIVMSG')
+@sopel.module.rule('(.*)')
 def manage_trigger(bot, trigger):
-	bot.memory['talking'].trigger(bot, trigger)		
+	if bot.memory.contains('talking'):
+		bot.memory['talking'].trigger(bot, trigger)
