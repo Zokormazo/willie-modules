@@ -1,12 +1,13 @@
 # coding=utf8
 """
-eol.py - Willie elotrolado.net tools module
-Copyright 2014, Julen Landa Alustiza
+eol.py - Sopel elotrolado.net tools module
+Copyright 2014-2015, Julen Landa Alustiza
 
 Licensed under the Eiffel Forum License 2.
 """
 
-import willie
+import sopel
+from sopel.config.types import ValidatedAttribute, StaticSection
 import requests
 import re
 import os
@@ -25,38 +26,45 @@ regexes = {
 	'viewprofile' : re.compile('(?:http://www\.elotrolado\.net/memberlist.php\?mode=viewprofile\&u=)(\d+)')
 }
 
-def configure(config):
-	"""
-	| [eol] | example | purpose |
-	| -------- | ------- | ------- |
-	| username | foo | username |
-	| password | 12345 | password |
-	| lines_to_show	| 5 | post/news lines to show |
-	"""
-	if config.option('Configure user eol module', False):
-		config.add_section('eol')
-		config.interactive_add('eol', 'username', 'username', '')
-		config.interactive_add('eol', 'password', 'password', '')
-		config.interactive_add('eol', 'lines_to_show', '5', '5')
+class EolSection(StaticSection):
+	username = ValidatedAttribute('username')
+	password = ValidatedAttribute('password')
 
-def setup(bot):
-	bot.memory['eol_manager'] = EolManager(bot)
+def configure(config):
+	config.define_section('eol', EolSection)
+	config.eol.configure_setting(
+		'username',
+		'EOL login username'
+	)
+	config.eol.configure_setting(
+		'password',
+		'EOL login password'
+	)
+
+def setup(bot=None):
+	if not bot:
+		return
+	bot.config.define_section('eol', EolSection)
+
+	if not bot.memory.contains('eol_manager'):
+		bot.memory['eol_manager'] = EolManager(bot)
+
 	if not bot.memory.contains('url_callbacks'):
-		bot.memory['url_callbacks'] = tools.WillieMemory()
+		bot.memory['url_callbacks'] = tools.SopelMemory()
 	bot.memory['url_callbacks'][regexes['thread']] = show_about_thread
 	bot.memory['url_callbacks'][regexes['new']] = show_about_new
 	bot.memory['url_callbacks'][regexes['viewtopic']] = show_about_viewtopic
 	bot.memory['url_callbacks'][regexes['viewprofile']] = show_about_viewprofile
 
-@willie.module.commands('who')
-@willie.module.example('.who melado')
+@sopel.module.commands('who')
+@sopel.module.example('.who melado')
 def who(bot, trigger):
 	"""Show profile info"""
 	if not trigger.group(2):
 		return
 	bot.memory['eol_manager']._show_profile(bot,trigger.group(2))
 
-@willie.module.rule('.*(?:http://www\.elotrolado\.net/hilo_[a-z0-9\-]*_)(\d+)(?:_s\d+)?(?:\#p(\d+))?')
+@sopel.module.rule('.*(?:http://www\.elotrolado\.net/hilo_[a-z0-9\-]*_)(\d+)(?:_s\d+)?(?:\#p(\d+))?')
 def show_about_thread(bot, trigger, found_match=None):
 	"""
 	Get information about thread and/or post from hilo_ link
@@ -67,7 +75,7 @@ def show_about_thread(bot, trigger, found_match=None):
 		if match.group(2):
 			bot.memory['eol_manager']._show_post(bot,match.group(2))
 
-@willie.module.rule('.*(?:http://www\.elotrolado\.net/noticia_[a-z0-9\-]*_)(\d+)')
+@sopel.module.rule('.*(?:http://www\.elotrolado\.net/noticia_[a-z0-9\-]*_)(\d+)')
 def show_about_new(bot, trigger, found_match=None):
 	"""
 	Get information about new from noticia_ link
@@ -76,7 +84,7 @@ def show_about_new(bot, trigger, found_match=None):
 	if match:
 		bot.memory['eol_manager']._show_new(bot, match.group(1))
 
-@willie.module.rule('.*(?:http://www\.elotrolado\.net/viewtopic\.php\?p=)(\d+)')
+@sopel.module.rule('.*(?:http://www\.elotrolado\.net/viewtopic\.php\?p=)(\d+)')
 def show_about_viewtopic(bot, trigger, found_match=None):
 	"""
 	Get information about thread and post from viewtopic.php link
@@ -86,7 +94,7 @@ def show_about_viewtopic(bot, trigger, found_match=None):
 		bot.memory['eol_manager']._show_thread_from_post(bot, match.group(1))
 		bot.memory['eol_manager']._show_post(bot, match.group(1))
 
-@willie.module.rule('.*(?:http://www\.elotrolado\.net/memberlist.php\?mode=viewprofile&u=)(\d+)')
+@sopel.module.rule('.*(?:http://www\.elotrolado\.net/memberlist.php\?mode=viewprofile&u=)(\d+)')
 def show_about_viewprofile(bot, trigger, found_match=None):
 	"""
 	Get information about profile from memberlist.php link
@@ -189,8 +197,7 @@ class EolManager:
 		self.session = requests.Session()
 		self.session.headers.update({'User-Agent': 'Braulio el bot de Zokormazo ' + __version__})
 		self._login(bot)
-		self.filename = os.path.join(bot.config.dotdir, 'eol.option')
-		self.thread_title = bot.config.eol.thread_title
+		self.filename = os.path.join(bot.config.core.homedir, 'eol.option')
 		self._read_config()
 
 	def _read_config(self):
